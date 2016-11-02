@@ -1,0 +1,27 @@
+decl 
+	integer status;
+	integer filedes;
+	string word;
+enddecl
+
+integer main() {
+	status = Create("test.dat");
+	print(status);
+	filedes = Open("test.dat");
+	print(filedes);
+	status = Write(filedes, "Good Morning");
+	print(status);
+	status= Delete("test.dat");
+	print(status);
+	status = Seek(filedes, 0);
+	print(status);
+	status= Read(filedes, word);
+	print(word);
+	print(status);
+	status = Close(filedes);
+	print(status);
+	status = Delete("test.dat");
+	print(status);
+	return 0;
+}
+	
