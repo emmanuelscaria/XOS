@@ -1,0 +1,126 @@
+alias physicalSP S0;
+physicalSP = ( [PTBR + 2*( SP/512 )] * 512) + ( SP%512 );
+
+alias sysCallNo S1;
+sysCallNo = [physicalSP-1];
+
+alias currentPID S12;
+currentPID = (PTBR - 1024) / 8;
+
+alias currentPCB S4;
+currentPCB = READY_LIST + 32 * currentPID;
+
+
+if( sysCallNo == 6) then
+
+	alias fileD S2;		//file descriptor
+	fileD = [physicalSP-4];
+
+	alias newLSeek S3;
+	newLSeek = [physicalSP-3];
+
+	if(fileD < 0 || fileD > 7) then
+  		[ physicalSP-2 ] = -1;
+  		ireturn;		
+  	endif;
+
+	if( [currentPCB + 15 + 2 * fileD]  == -1 ) then
+		[ physicalSP-2 ] = -1;
+   		ireturn;
+   	endif;
+   
+	alias SWOFTidx S5;
+	alias LSeek S6;
+	SWOFTidx = [currentPCB + 15 + 2 * fileD];
+   	LSeek = [currentPCB + 15 + 2 * fileD + 1];
+   
+	alias FATidx S7;
+	FATidx =  [ FILE_TABLE + 2 * SWOFTidx];
+   
+	alias filesize S8;
+	filesize = [FAT + FATidx*8 + 1];
+
+	if(newLSeek == 0) then
+    		[currentPCB + 15 + 2 * fileD + 1] = newLSeek;  
+    		[ physicalSP-2 ] = 0;
+   		ireturn;
+   	endif;
+
+	if((newLSeek >= 0) && (newLSeek <= filesize)) then
+		[currentPCB + 15 + 2*fileD + 1] = newLSeek;
+   		[ physicalSP-2 ] = 0;
+   		ireturn;
+   	endif;
+
+	[ physicalSP-2 ] = -1;
+	ireturn;
+endif;
+
+
+if( sysCallNo == 7) then
+
+	alias fileD S2;		//file descriptor
+	fileD = [physicalSP-4];
+
+	alias wordRead S3;
+	wordRead = [physicalSP-3];
+
+	if(fileD < 0 || fileD > 7) then
+  		[ physicalSP-2 ] = -1;
+  		ireturn;		
+  	endif;
+
+	if( [currentPCB + 15 + 2 * fileD]  == -1 ) then
+		[ physicalSP-2 ] = -1;
+   		ireturn;
+   	endif;
+   
+	alias SWOFTidx S5;
+	alias LSeek S6;
+	SWOFTidx = [currentPCB + 15 + 2 * fileD];
+   	LSeek = [currentPCB + 15 + 2 * fileD + 1];
+   
+	alias FATidx S7;
+	FATidx =  [ FILE_TABLE + 2 * SWOFTidx];
+   
+	alias filesize S8;
+	filesize = [FAT + FATidx*8 + 1];
+
+	alias basic_block S9;
+	basic_block = [FAT + FATidx*8 + 2];
+
+	load(1,basic_block);
+
+	if(LSeek == filesize) then
+    		[ physicalSP-2 ] = -1;
+   		ireturn;
+   	endif;
+
+	alias data_block_no S10;
+	data_block_no = LSeek / 512;
+	data_block_no = [data_block_no + 512];
+
+	store(1,basic_block);
+	load(1,data_block_no);
+
+	alias offset S11;
+	offset = LSeek % 512;
+	wordRead = [512 + offset];
+	
+	[physicalSP - 3] = wordRead;
+	[currentPCB+15+ 2*fileD +1]=[currentPCB+15+ 2*fileD +1] + 1;
+
+  	store(1,data_block_no);
+  	[ physicalSP-2 ] = 0;
+    	ireturn;
+    
+endif;
+
+
+
+
+
+
+
+
+

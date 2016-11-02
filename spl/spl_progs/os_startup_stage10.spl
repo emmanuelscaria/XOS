@@ -1,0 +1,90 @@
+load(5,19);	//FAT
+load(6,20);	//disk free list
+
+
+load (9, 3); 	//timer
+load (10, 4); 
+
+load (11, 5); 	//int1
+load (12, 6);
+
+load (13, 7); 	//int2
+load (14, 8);
+
+load (15, 9); 	//int3
+load (16, 10);
+
+load (17, 11); 	//int4
+load (18, 12);
+
+load (19, 13); 	//int5
+load (20, 14);
+
+load (21, 15); 	//int6
+load (22, 16);
+
+load(23,17);	//int7
+load(24,18);
+
+load(7,1);	//exception
+load(8,2);
+
+[READY_LIST + 0] = 0;
+load(25,21);		//init
+load(26,22);
+load(27,23);
+PTBR = 1024;
+PTLR = 4;
+print "os_startup";
+[PTBR + 0] = 21;
+[PTBR + 1] = "00";
+[PTBR + 2] = 22;
+[PTBR + 3] = "00";
+[PTBR + 4] = 23;
+[PTBR + 5] = "00";
+[PTBR + 6] = 25;
+[PTBR + 7] = "01";
+[READY_LIST + 1] =2;
+SP = 3*512;
+[25*512] = 0;
+
+
+alias counter S0;
+counter = 0;
+while ( counter < 128) do	// 64 entries	SWOFT
+	[ FILE_TABLE + counter + 0] = -1; 	// Set FAT to -1
+	[ FILE_TABLE + counter + 1] = 0; // Set File open count to 0
+	counter = counter + 2; 			// Move to next entry
+endwhile;
+
+counter = 0;
+while (counter < 16) do		//PPOFT to invalid
+	[READY_LIST + 15 + counter] = -1;
+	counter = counter + 2;
+	
+endwhile;
+
+counter = 0;
+while (counter < 26) do		//memlist to valid
+	[MEM_LIST + counter] = 1;
+	counter = counter + 1;
+endwhile;
+while (counter < 64) do		//memlist to invalid
+	[MEM_LIST + counter] = 0;
+	counter = counter + 1;
+endwhile;
+
+counter = 0;
+while (counter < 32) do		//PCB setting
+	[READY_LIST + counter*32 + 1] = 0;
+	counter = counter + 1;
+endwhile;
+
+counter = 448;
+while(counter<512) do
+	[DISK_LIST + counter] = 0;
+	counter = counter + 1;
+endwhile;
+store(6,20);
+
+ireturn;

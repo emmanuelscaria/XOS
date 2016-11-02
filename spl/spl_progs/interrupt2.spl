@@ -1,0 +1,124 @@
+//print "in int 2";
+
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+
+alias sysCallNo S1;
+sysCallNo = [physicalSP - 1];
+
+if(sysCallNo == 2) then		//open
+	
+	alias fileName S2;
+	fileName = [physicalSP - 3];
+
+	alias FATidx S3;
+	FATidx = 0;
+
+	while( FATidx < 512 )	do	//64 FAT entries
+		if( [FAT + FATidx] == fileName ) then
+			break;
+		endif;
+		FATidx = FATidx+8;
+	endwhile;
+
+	if( FATidx == 512 ) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+
+	FATidx = FATidx / 8;	// the index of FAT entry
+
+	alias SWOFTidx S4;
+	SWOFTidx = 0;
+	while (SWOFTidx < 64) do
+		if( [FILE_TABLE + SWOFTidx*2] == FATidx) then
+			break;
+		endif;
+		SWOFTidx = SWOFTidx + 1;
+	endwhile;
+
+	if(SWOFTidx == 64) then
+		SWOFTidx = 0;
+		while ( SWOFTidx < 64) do
+			if( [FILE_TABLE + SWOFTidx*2] == -1) then
+				break;
+			endif;
+			SWOFTidx = SWOFTidx + 1;
+		endwhile;
+		
+		if(SWOFTidx == 64) then
+			[physicalSP - 2] = -1;
+			ireturn;
+		endif;
+		[FILE_TABLE + SWOFTidx*2] = FATidx;
+		[FILE_TABLE + SWOFTidx*2 + 1] = 0;
+	endif;
+	
+	alias currentPCB S5;
+	currentPCB = READY_LIST + 32*((PTBR - 1024)/8);
+
+	alias PPOFTidx S6;
+	PPOFTidx = 0;
+	while(PPOFTidx < 8 ) do
+		if( [currentPCB + 15 + PPOFTidx*2] == -1) then
+			break;
+		endif;
+		PPOFTidx = PPOFTidx + 1;
+	endwhile;
+	
+	if(PPOFTidx == 8) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	[currentPCB + 15 + PPOFTidx*2] = SWOFTidx;
+	[currentPCB + 15 + PPOFTidx*2 + 1] = 0;
+
+	[FILE_TABLE+SWOFTidx*2+1] = [FILE_TABLE + SWOFTidx*2 + 1] + 1;
+
+	[physicalSP - 2] = PPOFTidx;
+	ireturn;
+
+endif;
+
+if (sysCallNo == 3) then
+
+	alias fileDescriptor S2;
+	fileDescriptor = [physicalSP - 3];
+	
+	if (fileDescriptor > 7 || fileDescriptor < 0) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	alias currentPCB S3;
+	currentPCB = READY_LIST + 32 * ((PTBR - 1024) / 8);
+
+	if ([currentPCB + 15 + fileDescriptor * 2] == -1) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+
+	alias SWOFTidx S4;
+	SWOFTidx = [currentPCB + 15 + fileDescriptor * 2];
+	
+	[FILE_TABLE+ SWOFTidx*2 +1] = [FILE_TABLE + SWOFTidx*2 +1] - 1;
+
+	if( [FILE_TABLE + SWOFTidx*2 + 1] == 0 ) then
+		[FILE_TABLE + SWOFTidx*2] = -1;
+	endif;
+	
+	[currentPCB + 15 + fileDescriptor * 2] = -1;
+	[currentPCB + 15 + fileDescriptor * 2 + 1] = -1;
+	
+	[physicalSP - 2] = 0;
+	ireturn;
+	
+endif;
+
+
+
+
+
+
+

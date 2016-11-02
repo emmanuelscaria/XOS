@@ -1,0 +1,101 @@
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+
+alias sysCallNo S1;
+sysCallNo = [physicalSP-1];
+
+alias currentPID S2;
+currentPID = (PTBR - 1024) / 8;
+
+alias currentPCB S3;
+currentPCB = READY_LIST + 32 * currentPID;
+
+if( sysCallNo == 5) then
+
+	alias fileD S4;		//file descriptor
+	fileD = [physicalSP-4];
+
+	alias wordToWrite S5;
+	wordToWrite = [physicalSP-3];
+
+	if(fileD < 0 || fileD > 7) then
+  		[ physicalSP-2 ] = -1;
+  		ireturn;		
+  	endif;
+
+	if( [currentPCB + 15 + 2 * fileD]  == -1 ) then
+		[ physicalSP-2 ] = -1;
+   		ireturn;
+   	endif;
+   
+	alias SWOFTidx S6;
+	alias LSeek S7;
+	SWOFTidx = [currentPCB + 15 + 2 * fileD];
+   	LSeek = [currentPCB + 15 + 2 * fileD + 1];
+   
+	alias FATidx S8;
+	FATidx =  [ FILE_TABLE + 2 * SWOFTidx];
+   
+	alias basic_block S9;
+	basic_block = [FAT + FATidx*8 + 2];
+	load (1, basic_block);
+
+	alias data_block S10;
+	data_block = LSeek / 512;
+
+	alias flag S11;
+	alias counter S12;
+	flag = 0;
+	counter = 23;
+
+	if( [512 + data_block] == -1) then
+		counter = 23;
+       		while( counter < 448) do
+       			if( [DISK_LIST + counter] == 0) then
+       				flag = 1;
+       				[DISK_LIST + counter] = 1;
+		        	break;
+       			endif;
+       			counter = counter + 1;
+       		endwhile;
+   
+   		if(flag == 0) then
+			[ physicalSP-2 ] = -1;  
+    			ireturn;
+   		endif;
+
+		[data_block + 512] = counter;
+		store( 1, basic_block);
+
+		[FAT + 8*FATidx + 1] = [FAT + 8*FATidx + 1 ] + 512;
+ 		store(5,19);
+ 		store(6,20);  
+ 	endif;	
+
+	data_block = [ index + 512 ];
+ 	load(1,data_block);
+
+	alias offset S13;
+	offset = LSeek % 512;
+
+ 	[ 512 + offset ] = wordToWrite;
+	store(1,data_block);
+
+ 	[currentPCB+15+ 2*fileD +1]=[currentPCB+15+ 2*fileD +1] + 1;
+ 	[ physicalSP-2 ] = 0;
+        ireturn;
+    
+endif;	
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,113 @@
+// Since interrupt routines execute in kernel mode, you will need to calculate the physical address of SP using the formula described in  Stage 6
+  
+  alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+
+// Get system call no. from the stack and put it in a register
+alias currentPID S14;
+currentPID = (PTBR - 1024) / 8;
+
+
+alias currentPCB S13;
+currentPCB = READY_LIST + 32 * currentPID;
+
+alias sysCallNo S1;
+sysCallNo = [physicalSP-1];
+
+// Get arguments from stack and put it in registers
+
+alias arg1 S2;
+arg1 = [physicalSP-4];
+
+alias arg2 S10;
+arg2 = [physicalSP-3];
+
+alias counter S3;
+counter = 1;
+
+alias offset S4;
+offset = 0;
+
+alias flag S5;
+flag = 0;
+
+alias DFL S6;
+DFL = 3072;
+
+alias index S7;
+index = 0;
+
+alias basic_block S8;
+
+alias data_block S9;
+
+alias field1 S11;
+
+alias field2 S12;
+
+//print "********";
+counter = 0;
+flag=0;
+offset = 0;
+if( sysCallNo == 5) then
+  if(arg1 < 0 || arg1 > 7) then
+  [ physicalSP-2 ] = -1;
+  ireturn;		
+  endif;
+ // print "args";
+  //print(arg1);
+  //print(arg2);
+  //print([currentPCB + 15 + 2 * arg1]);
+    field1 = [ currentPCB + 15 + 2 * arg1 ];
+    field2 = [currentPCB + 15 + 2 * arg1 + 1];
+    
+ if( field1  == -1 ) then
+   [ physicalSP-2 ] = -1;
+   ireturn;
+ endif;
+   
+    //field1 = [currentPCB + 15 + 2 * arg1];
+    //field2 = [currentPCB + 15 + 2 * arg1 + 1];
+   index =  [ FILE_TABLE + 2 * field1];
+   basic_block = [ FAT + 8 * index + 2 ];
+   load(1,basic_block);
+   index = field2 / 512;
+   
+   flag = 0;
+   if([index + 512] == -1) then
+        counter = 23;
+       while( counter < 448) do
+       if( [DISK_LIST + counter] == 0) then
+       flag = 1;
+       [DISK_LIST + counter] = 1;
+      
+       break;
+       endif;
+       counter = counter + 1;
+       endwhile;
+   
+   if(flag == 0) then
+    [ physicalSP-2 ] = -1;  
+    ireturn;
+   endif;
+
+  [index + 512] = counter;
+  store(1,basic_block);
+  
+  offset =  [ FILE_TABLE + 2 * field1];
+   [ FAT + 8 * offset + 1 ] = [ FAT + 8 * offset + 1 ] + 512;
+ store(5,19);
+ store(6,20);  
+ endif;
+ 
+ data_block = [ index + 512 ];
+ load(1,data_block);
+ 
+ offset = field2 % 512;
+ [ 512 + offset ] = arg2;
+ store(1,data_block);
+ [currentPCB + 15 + 2 * arg1 + 1] =  [currentPCB + 15 + 2 * arg1 + 1] + 1;
+ 
+  [ physicalSP-2 ] = 0;
+    ireturn;
+    endif;

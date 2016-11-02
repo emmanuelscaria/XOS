@@ -1,0 +1,118 @@
+alias Cause S0;
+alias VPagenum S1;
+alias Ip_addr S2;
+
+alias physicalSP S3;
+physicalSP = [PTBR + 2 * SP/512]*512 + SP%512;
+alias PID S4;
+PID = (PTBR - PAGE_TABLE)/8;
+
+
+Cause = EFR % 10;// Gets value of cause field (size 1 char)
+VPagenum = (EFR / 10) % 100;    // Gets value of BadVAddr 
+Ip_addr = (EFR/1000);//Gets value of IP at the point of exception
+
+if (Cause != 0) then
+	if (Cause == 1) then
+		print("Igl Instruction");
+	endif;
+	if (Cause == 1) then
+		print("Igl mem access");
+	endif;
+	if (Cause == 1) then
+		print("Artmtc exception");
+	endif;
+	if (Cause == 1) then
+		print("Igl. operands");
+	endif;
+endif;
+
+if ([PTBR + 2*VPagenum] == -1) then
+	print("Invalid mem ref");
+	breakpoint;
+endif;
+
+if ([PTBR + 2*VPagenum] == -1 || Cause != 0) then
+	//Call exit
+	SP = SP + 2;
+	physicalSP = [PTBR + 2 * SP/512]*512 + SP%512;
+	[physicalSP - 1] = 10;
+	inline "JMP 3584";
+endif;
+
+alias freePage S5;
+freePage = 0;
+//Search if there is a free page
+while (freePage < 64) do
+	if ([MEM_LIST + freePage] == 0) then
+		[MEM_LIST + freePage] = 11;
+		break;
+	endif;
+	freePage = freePage + 1;
+endwhile;
+// If there are no free pages, use the second chance algorithm to swap out pages
+if (freePage == 64) then
+	alias pTableEntry S6;
+	pTableEntry = PTBR + VPagenum*2;
+	while (1 == 1) do
+		pTableEntry = pTableEntry + 2;
+		//make it look circular
+		if (pTableEntry == 1280) then
+			pTableEntry = PAGE_TABLE;
+			continue;
+		endif;
+		//ignore stack
+		if ((pTableEntry - (PAGE_TABLE + 6)) % 8 == 0) then 
+			continue;
+		endif;
+
+		if ([pTableEntry + 1] == "11") then 
+			[pTableEntry + 1] = "01";
+			continue;
+		endif;
+
+		if ([pTableEntry + 1] == "00") then
+			continue;
+		endif;
+		//You can't swap out this page if it is referened by some other process
+		if ([MEM_LIST + [pTableEntry]] != 1) then      //What will happen if all pages are referenced by atleast one process?
+			continue;
+		endif;
+		// [pTableEntry + 1] == "01" // Swap out victim page idetified!
+		break;
+	endwhile;
+		// Scan for a free block in swap
+		alias freeSwapBlock S7;
+		freeSwapBlock = 448;
+		while (freeSwapBlock < 512) do
+			if ([DISK_LIST + freeSwapBlock] == 0) then
+				[DISK_LIST + freeSwapBlock] = 1;
+				break;
+			endif;
+			freeSwapBlock = freeSwapBlock + 1;
+		endwhile;
+		if (freeSwapBlock == 512) then
+			print("Swap Full");
+			halt;
+		endif;
+		store([pTableEntry], freeSwapBlock);
+		freePage = [pTableEntry];
+		[pTableEntry] = freeSwapBlock;
+		[pTableEntry + 1] = "00";
+endif;
+	alias pageToLoad S8;
+	pageToLoad = [PTBR + VPagenum*2];
+	
+	if (pageToLoad >= 448) then
+		[DISK_LIST + pageToLoad] = [DISK_LIST + pageToLoad] - 1;
+	endif;
+	
+	load(freePage, pageToLoad);
+	
+	[PTBR + VPagenum*2] = freePage;
+	[PTBR + VPagenum*2 + 1] = "11";
+
+	SP = SP + 1;
+	physicalSP = [PTBR + 2 * SP/512]*512 + SP%512;
+	[physicalSP] = Ip_addr;
+	ireturn;

@@ -1,0 +1,174 @@
+
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+
+alias sysCallNo S1;
+sysCallNo = [physicalSP - 1];
+
+
+if( sysCallNo == 1 ) then		//create()
+
+	alias fileName S2;
+	fileName = [physicalSP - 3];
+
+	alias i S3;
+	i=0;
+
+	while( i < 512 )	do	//64 FAT entries
+		if( [FAT + i] == fileName ) then
+			[physicalSP - 2] = 0;
+		//	print "exists";
+			ireturn;
+		endif;
+		i = i+8;
+		
+	endwhile;
+
+	
+	alias DFLidx S4;
+	DFLidx = 0;
+	while( DFLidx<448 ) do	//447 df list blocks
+		if( [DISK_LIST + DFLidx] == 0 ) then
+			
+			break;
+		endif;
+		DFLidx = DFLidx+1;
+	endwhile;
+
+
+	//print(DFLidx);
+
+
+	if(DFLidx == 448) then
+		[physicalSP - 2] = -1;
+		//print "disk full";
+		ireturn;
+	endif; 	
+
+	i=0;
+	while( i < 512 ) do	//64 FAT entries .check basic blocks
+		if( [FAT + i + 2] == -1 ) then
+			[FAT + i] = fileName;
+			[FAT + i + 1] = 0;
+			[FAT + i + 2] = DFLidx;	
+			break;
+		endif;
+		i = i+8;
+	endwhile;
+
+	if(i == 512) then
+		[physicalSP -2] = -1;
+		//print "FAT full";
+		ireturn;
+	endif;
+
+	load(1,DFLidx);
+
+	i = 0;
+	while (i < 256) do
+		[SCRATCHPAD + i] = -1;
+		i = i + 1;		
+	endwhile;
+
+	store(1,DFLidx);
+	[FAT + 512 + DFLidx] = 1;
+	
+	store(5, 19);	// store the FAT
+	store(6, 20);	// store the Disk Free List
+	
+	[physicalSP - 2] = 0;    ////RETUEN 0 FOR SUCCESS
+	//print "success";
+	ireturn;
+
+endif;
+
+if(sysCallNo == 4) then
+
+	alias fileName S2;
+	fileName = [physicalSP - 3];
+
+	alias FATidx S3;
+	FATidx = 0;
+
+	//check if file is present in FAT
+	while(FATidx < 64) do
+		if( [FAT + 8*FATidx] == fileName) then
+			break;
+		endif;
+		FATidx = FATidx + 1;
+	endwhile;
+	
+	if(FATidx == 64) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+
+	alias SWOFTidx S4;
+	SWOFTidx = 0;
+
+	//cehck if file is opened.entry in SWOFT check
+	while(SWOFTidx < 64) do
+		if( [FILE_TABLE +SWOFTidx*2] == FATidx ) then
+			break;
+		endif;
+		SWOFTidx = SWOFTidx + 1;
+	endwhile;
+
+	if(SWOFTidx<64 && [SWOFTidx*2 + FILE_TABLE + 1] > 0) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+
+	alias dbno S5;	//data block no
+	dbno = 0;
+
+	alias btc S6;	//block to clear
+	btc = 0;
+
+	alias counter S7;
+
+	while (dbno < 256) do
+		
+		load ( 1 , [FAT + FATidx*8 + 2] );
+	
+		btc = [SCRATCHPAD + dbno];
+		dbno = dbno + 1;
+		if(btc == -1) then
+			continue;
+		endif; 
+		
+		load (1, btc);
+		
+		counter = 0;
+		while(counter < 512) do
+			[SCRATCHPAD + counter] = "";
+			counter = counter + 1;
+		endwhile;
+
+		store(1,btc);
+
+		[3072 + btc] = 0;
+
+	endwhile;
+	
+	load(1, [FAT + FATidx*8 + 2]);
+	counter = 0;
+	while (counter < 512) do
+		[SCRATCHPAD + counter] = "";
+		counter = counter + 1;	
+	endwhile;
+	store(1, [FAT + FATidx * 8 + 2]);
+	[3072 + [FAT + FATidx * 8 + 2]] = 0;
+
+	// invalidate the FAT entry
+	[FAT + FATidx * 8] = -1;
+	[FAT + FATidx * 8 + 1] = 0;	// size
+	[FAT + FATidx * 8 + 2] = -1;
+	
+	store(5, 19);	// FAT
+	store(6, 20);	// Disk Free List
+	
+	// return with a zero
+	[physicalSP - 2] = 0;
+	ireturn;
+endif;

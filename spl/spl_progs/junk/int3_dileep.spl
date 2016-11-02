@@ -1,0 +1,153 @@
+// Since interrupt routines execute in kernel mode, you will need to calculate the physical address of SP using the formula described in  Stage 6
+  
+  alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+
+// Get system call no. from the stack and put it in a register
+alias currentPID S14;
+currentPID = (PTBR - 1024) / 8;
+alias filesize S15;
+
+alias currentPCB S13;
+currentPCB = READY_LIST + 32 * currentPID;
+
+alias sysCallNo S1;
+sysCallNo = [physicalSP-1];
+
+// Get arguments from stack and put it in registers
+
+alias arg1 S2;
+arg1 = [physicalSP-4];
+
+alias arg2 S10;
+arg2 = [physicalSP-3];
+
+alias counter S3;
+counter = 1;
+
+alias offset S4;
+offset = 0;
+
+alias flag S5;
+flag = 0;
+
+alias DFL S6;
+DFL = 6*512;
+
+alias index S7;
+index = 0;
+
+alias basic_block S8;
+
+alias data_block S9;
+
+alias field1 S11;
+
+alias field2 S12;
+
+//print "********";
+if( sysCallNo == 6) then
+  if(arg1 < 0 || arg1 > 7) then
+  [ physicalSP-2 ] = -1;
+  ireturn;		
+  endif;
+  //print "args";
+  //print(arg1);
+  //print(arg2);
+  //print([currentPCB + 15 + 2 * arg1]);
+ if( [currentPCB + 15 + 2 * arg1]  == -1 ) then
+   [ physicalSP-2 ] = -1;
+   ireturn;
+   endif;
+   
+    field1 = [currentPCB + 15 + 2 * arg1];
+    field2 = [currentPCB + 15 + 2 * arg1 + 1];
+   
+  //print "field is";
+  //print(field1);
+   index =  [ FILE_TABLE + 2 * field1];
+   //print "index is";
+   //print(index);
+   
+   filesize = [ FAT + 8 * index + 1 ];
+   //if(arg2 < 0 || arg2  > filesize) then
+   //[currentPCB + 15 + 2 * arg1 + 1] = arg2;
+   //[ physicalSP-2 ] = -1;
+   //ireturn;
+   //endif;
+   
+
+   if(arg2 == 0) then
+    [currentPCB + 15 + 2 * arg1 + 1] = arg2;  
+    [ physicalSP-2 ] = 0;
+   ireturn;
+   endif;        //ireturn;
+    
+    if((arg2 + field2 >= 0) && (arg2 + field2 <= filesize)) then
+  [currentPCB + 15 + 2 * arg1 + 1] = field2 + arg2;
+   [ physicalSP-2 ] = 0;
+   ireturn;
+   endif;
+[ physicalSP-2 ] = -1;
+endif;
+   
+   if( sysCallNo == 7) then
+  if(arg1 < 0 || arg1 > 7) then
+  [ physicalSP-2 ] = -1;
+  ireturn;		
+  endif;
+ // print "args";
+  //print(arg1);
+//  print(arg2);
+  //print([currentPCB + 15 + 2 * arg1]);
+ if( [currentPCB + 15 + 2 * arg1]  == -1 ) then
+   [ physicalSP-2 ] = -1;
+   ireturn;
+   endif;
+   
+    field1 = [currentPCB + 15 + 2 * arg1];
+    field2 = [currentPCB + 15 + 2 * arg1 + 1];
+  //print "field is";
+  //print(field1);
+  //print(field2);
+  //print "((()))";
+   index =  [ FILE_TABLE + 2 * field1];
+    filesize = [ FAT + 8 * index + 1 ];
+   //print "index is";
+   //print(index);
+   basic_block = [ FAT + 8 * index + 2 ];
+   //print "the bb is ";
+   //print (basic_block);
+   
+   load(1,basic_block);
+   
+   
+   if(field2 == filesize) then
+    [ physicalSP-2 ] = -1;
+   ireturn;
+   endif;
+   
+   index = field2/512;
+ data_block = [ index + 512];
+   
+  store(1,basic_block);
+ //store(5,19);
+ //store(6,20);  
+
+ 
+    //print "hi4";
+ load(1,data_block);
+ 
+ offset = field2 % 512;
+  arg2 = [ 512 + offset ] ;
+ //store(1,data_block);
+ 
+ [physicalSP-3] = arg2;
+    //print "hi5";
+ [currentPCB + 15 + 2 * arg1 + 1] = [currentPCB + 15 + 2 * arg1 + 1] + 1;
+  store(1,data_block);
+  [ physicalSP-2 ] = 0;
+  //print "var";
+  //print ( [physicalSP-3]);
+    ireturn;
+    endif;

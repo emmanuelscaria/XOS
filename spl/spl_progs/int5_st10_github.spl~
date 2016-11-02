@@ -1,0 +1,249 @@
+alias phySP S0;
+phySP = (SP%512) + ([PTBR + 2*(SP/512)]*512);
+alias syscallno S1;
+syscallno = [phySP-1];
+alias ctr S2;
+alias childpcbno S4;
+///// Fork
+//print("int 5");
+//print (PTBR-1024)/8;
+alias ctr2 S7;
+alias ctr3 S8;
+alias ctr4 S10;
+alias victim S11;
+alias valid S12;
+alias swptbr S13;
+alias temp S14;
+alias childpcb S15;
+
+if(syscallno==8) then
+	//print("in fork");
+	ctr=0;
+	while(ctr<32)  do  // check PCB space available
+		if([1536 + 32*ctr + 1] == 0) then    //state = 0 then free 
+			break;
+		endif;
+		ctr=ctr+1;
+	endwhile;
+	if(ctr==32) then
+		//print("nopcb");
+		[phySP-2]=-1;
+		ireturn;
+	endif;
+	
+	childpcbno = ctr;
+	childpcb =1536 + 32*childpcbno;
+
+	[childpcb] = childpcbno; // setting pid 
+
+	    [1472 + childpcbno] = [1472 + (PTBR-1024)/8];  // S10 mod !!!!!!!!!!!!!!!!
+
+
+	//print(childpcbno);
+
+
+
+//----------------------------------------
+	//step 4 deleted
+//---------------------------------
+
+
+
+	ctr=0;
+	//ctr2=0;
+	while(ctr<64) do 
+
+		if([1280 + ctr]==0) then
+			break;
+		endif;
+		ctr=ctr+1;
+	endwhile;
+	//print(ctr);
+
+
+	//---------------- 
+	if(ctr==64) then    
+		  //  print ("yoyo");
+
+		            //note:If a free page for stack is not available, some page can be swapped to the disk to make space 
+		
+		          //  [phySP-2]=-1;
+		           	//ireturn;
+	  
+
+	ctr2=0;
+	ctr3=PTBR + 8;
+	//print("lolo");
+	valid =0;
+	while(1) do   //technical 32*2
+		if(ctr3==1024 + 8*32) then
+			ctr3=1024;
+		endif;
+		//print("pids");
+		//print (ctr3-1024)/8;
+
+		ctr4=0;
+		while(ctr4<3 && ctr3!=1024) do  //stack excluded
+			if([1280 + [ctr3 + 2*ctr4]]==1) then    /// single page that is not shared 
+				
+				if([ctr3 + 2*ctr4 + 1]=="01") then         // the ref. bit is 0	
+					victim =[ctr3 + 2*ctr4];
+					swptbr=ctr3 + 2*ctr4;
+					//print("&&&&");
+					//print(swptbr);
+					//print(victim);
+					//print(ctr3);
+					valid=1;                           // this if block has to be written above the one below it!!!
+					break;
+				endif;	
+
+				if([ctr3 + 2*ctr4 + 1]=="11") then
+					[ctr3 + 2*ctr4 + 1]="01";	
+				//else if([ctr3 + 2*ctr4 + 1]=="10") then
+				//		[ctr3 + 2*ctr4 + 1]="00";
+				//	endif;
+				endif;
+				
+			endif; 
+			ctr4=ctr4+1;
+		endwhile;
+		if(valid==1) then
+			break;
+		endif;
+		ctr2=ctr2+1;
+		ctr3=ctr3+8;
+	endwhile;
+//----------------- swap find del
+	 
+//--------------------------
+
+//fat = [1472 + ((ctr3-1024)/8)] ;  //pid will be the pid from which we are replacing   
+//basic= [FAT + ([1472 + ((ctr3-1024)/8)])*8 + 2];
+//print("ashwin");
+temp =([1472 + ((ctr3-1024)/8)]);
+//print(temp);
+load(1, [FAT + temp*8 + 2]);
+//print("!!!!!!!");
+//code_page =[512 + ctr4];
+[swptbr]= [512 + ctr4];
+[swptbr+1]="00";
+
+
+
+
+
+	ctr=victim;
+
+	//print("!!!!!");
+//	print(ctr);
+	//print([PTBR + 6]);
+
+	endif;
+
+	breakpoint;
+	[1280 + ctr]=1; //stack used
+	
+
+	//print ("stack=");
+	//print ctr;
+	ctr2=0;
+	while(ctr2<512) do //copy stack word to word
+		[512*ctr + ctr2]= [[PTBR + 2*3]*512 + ctr2]; 
+		ctr2=ctr2+1;
+	endwhile;
+	temp=1024 + 8*childpcbno;
+	[temp + 3*2] = ctr; // setting page for stack
+	[temp + 3*2 + 1] = "01";
+
+	ctr=0;
+	while(ctr<=2) do // copy page table except stack
+		[temp+ 2*ctr ]=[PTBR + 2*ctr];
+		[temp + 2*ctr + 1]=[PTBR + 2*ctr + 1];
+
+		if([PTBR + 2*ctr + 1] == "01" || [PTBR + 2*ctr + 1] == "11") then
+			[1280 + [PTBR + 2*ctr]]= 1 + [1280 + [PTBR + 2*ctr]] ;
+		else if( [PTBR + 2*ctr] >=448) then
+				[6*512 + [PTBR + 2*ctr]] = 1 + [6*512 + [PTBR + 2*ctr]];   // increase the swap area shared pages count
+			endif;
+
+		endif;
+
+		ctr=ctr+1;
+
+	endwhile;
+
+
+
+
+	store(6,20);
+
+
+
+	breakpoint;
+
+
+	
+
+	[childpcb+ 5]=1024 + 8*childpcbno; //set PTBR in pcb
+	[childpcb+ 4] = [phySP] ;// setting the IP ,note: only physical add. is dif. bt logical is same 
+	[childpcb+ 3]=SP-1; 
+
+	alias ppid S9;
+	ppid=(PTBR-1024)/8;
+
+	[childpcb +2]=BP; //BP
+
+
+	[childpcb+6]=PTLR;//PTLR
+	[childpcb +7]=R0; //R0
+	[childpcb+8]=R1;
+	[childpcb+9]=R2;
+	[childpcb +10]=R3;
+	[childpcb+11]=R4;
+	[childpcb+12]=R5;
+	[childpcb+13]=R6;
+	[childpcb+14]=R7;
+
+
+	ctr=15;
+	//print("here");
+	while(ctr<31) do
+		[childpcb+ctr]=[1536 + 32*ppid + ctr];
+		//print(ctr);
+		//print([1536 + 32*ppid + ctr]);
+		if(ctr%2==1 && [1536 + 32*ppid+ ctr]!=-1) then
+			//print("in if");
+			temp=[1536 + 32*ppid + ctr];
+			//print(temp);
+			[FILE_TABLE + [1536 + 32*ppid + ctr] +1]=1+[FILE_TABLE + [1536 + 32*ppid + ctr] +1]; //in file open cnt if open
+			//print("out if");
+		endif;
+		ctr=ctr+1;
+
+	endwhile;
+	[childpcb +1]=1;  // ready state
+
+	[phySP-2]=childpcbno; //return child pid to the parent !!!!!!
+
+	[childpcb +31]=[READY_LIST + ((PTBR-1024)/8)*32 + 0]; // for getppid !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+	phySP = ((SP-1)%512) + ([(1024 + 8*childpcbno) + 2*((SP-1)/512)]*512); //return -2 to child
+	//print(phySP);
+	[phySP-1]=-2; // return -2 to the child
+
+	//print("child..");
+	//print([1536 + 32*childpcbno + 4] );
+	//print("forked");
+	
+//	[phySP]=[1536 + 32*childpcbno + 4];
+
+	
+	//print(childpcbno);
+	
+	
+	//print("out fork");
+	ireturn;
+
+
+endif;

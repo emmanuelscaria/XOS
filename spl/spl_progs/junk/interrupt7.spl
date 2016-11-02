@@ -1,0 +1,95 @@
+alias physicalSP S0;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+
+alias sysCallNo S1;
+sysCallNo = [physicalSP - 1];
+
+if(sysCallNo == 10) then	//exit
+
+	alias nextPID S2;
+	nextPID = 0;
+	while(nextPID < 32) do
+		if( [READY_LIST + nextPID*32 + 1] == 1) then
+			break;
+		endif;
+		nextPID = nextPID + 1;
+	endwhile;
+
+	if(nextPID == 32) then	//halt if no more processes in mem
+		halt;
+	endif;
+
+	alias PID S4;
+	PID = (PTBR - 1024) / 8; 
+
+	alias currentPCB S3;
+	currentPCB = PID*32 + READY_LIST;
+	
+	alias counter S5;
+	counter = 0;	
+
+	//closing open files
+	while (counter < 8) do		
+		if ([currentPCB + 15 + counter*2] != -1) then
+			//decrement file count in SWOFT
+			[FILE_TABLE + [currentPCB + 15 + counter * 2] * 2 + 1] = [FILE_TABLE + [currentPCB + 15 + counter * 2] * 2 + 1] - 1;
+			if ([FILE_TABLE + [currentPCB + 15 + counter * 2] * 2 + 1] == 0) then				
+			// invalidate the entry in SWOFT
+			[FILE_TABLE+[currentPCB+15+counter*2]*2] = -1;
+			endif;
+			// invalidate the PPOFT by setting fields to -1
+			[currentPCB + 15 + counter * 2] = -1;
+			[currentPCB + 15 + counter * 2 + 1] = -1;
+		endif;
+		counter = counter + 1;
+	endwhile;
+	
+	[currentPCB + 1] = 0;		//state = 0
+
+	counter = 0;
+	while (counter < 4) do
+		if ([PTBR + counter * 2] == -1) then
+			// already invalid
+			counter = counter + 1;
+			continue;
+		endif;
+		[MEM_LIST + [PTBR + counter * 2]] = 0;	//mem freed
+		[PTBR + counter * 2] = -1;	//invalidate PTBR
+		[PTBR + counter * 2 + 1] = "00";
+		counter = counter + 1;
+	endwhile;	
+
+	alias newPCB S3;
+	newPCB = READY_LIST + nextPID * 32;
+	
+	BP = [newPCB + 2];
+	SP = [newPCB + 3];	
+	PTBR = [newPCB + 5];
+	PTLR = [newPCB + 6];
+	R0 = [newPCB + 7];
+	R1 = [newPCB + 8];
+	R2 = [newPCB + 9];
+	R3 = [newPCB + 10];
+	R4 = [newPCB + 11];
+	R5 = [newPCB + 12];
+	R6 = [newPCB + 13];
+	R7 = [newPCB + 14];
+	
+	SP = SP + 1;
+	alias newPhysicalSP S6;
+	newPhysicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+	[newPhysicalSP] = [newPCB + 4];		//IP
+	
+	[newPCB + 1] = 2;	//run
+
+	ireturn;
+	
+endif;
+
+
+
+
+
+
+
+

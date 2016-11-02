@@ -1,0 +1,114 @@
+alias physicalSP S0;
+physicalSP = [PTBR + 2*(SP/512)] * 512 + (SP % 512);
+
+alias sysCallNo S1;
+sysCallNo = [physicalSP - 1];
+
+alias PID S8;
+PID = (PTBR - 1024) / 8;
+
+alias currentPCB S9;
+currentPCB = READY_LIST + 32 * PID;
+
+
+if(sysCallNo == 9) then		//exec
+
+	alias filename S2;
+	filename  = [physicalSP - 3];
+
+	alias FATidx S3;
+	FATidx = 0;
+	while(FATidx < 64) do 
+		if([FAT + FATidx*8] == filename) then
+			break;
+		endif;
+		FATidx = FATidx + 1;
+	endwhile;
+	
+	if(FATidx == 64) then
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+
+	load(1, [FAT + FATidx*8 + 2]);
+	
+	alias countCodeBlocksNew S4;
+	countCodeBlocksNew = 0;
+	alias counter S5;
+	counter = 0;
+	while (counter < 256) do	//check valid file
+		if ([SCRATCHPAD + counter] > 0 && [SCRATCHPAD + counter] < 512) then
+			countCodeBlocksNew = countCodeBlocksNew + 1;
+		endif;
+		counter = counter + 1;
+	endwhile;
+	
+	if (countCodeBlocksNew > 3) then	// invalid file
+		[physicalSP - 2] = -1;
+		ireturn;
+	endif;
+	
+	alias validCodeBlocksOld S6;
+	validCodeBlocksOld = 0;
+	
+	counter = 0;
+	while (counter < 3) do	// 4th for stack
+		if ([PTBR + counter * 2 + 1] == "01" || [PTBR + counter * 2 + 1] == "11") then
+			[MEM_LIST + [PTBR + counter * 2]] = [MEM_LIST + [PTBR + counter * 2]] - 1;
+		endif;
+		if ([PTBR + counter * 2 + 1] == "00" && [PTBR + counter * 2] > 447) then
+			[DISK_LIST + [PTBR + counter * 2]] = [DISK_LIST + [PTBR + counter * 2]] - 1;
+		endif;
+		counter = counter + 1;
+	endwhile;
+	
+	load(1, [FAT + FATidx*8 + 2]);
+	
+	counter = 0;
+	while (counter < countCodeBlocksNew) do
+		[PTBR + counter * 2] = [SCRATCHPAD + counter];
+		[PTBR + counter * 2 + 1] = "00";
+		counter = counter + 1;
+	endwhile;
+
+	while (counter < 3) do
+		[PTBR + counter * 2] = -1;
+		[PTBR + counter * 2 + 1] = "00";
+		counter = counter + 1;
+	endwhile;
+	
+	
+
+
+	
+	// close all files opened by the current process
+		
+	counter = 0;
+	while (counter < 8) do
+		if ([currentPCB + 15 + counter * 2] != -1) then				
+			// we have a valid index to SWOFT
+			// index into it and decrement file count
+			[FILE_TABLE + [currentPCB + 15 + counter * 2] * 2 + 1] = [FILE_TABLE + [currentPCB + 15 + counter * 2] * 2 + 1] - 1;
+			if ([FILE_TABLE + [currentPCB + 15 + counter * 2] * 2 + 1] == 0) then				
+				// there are no more references to the file
+				// invalidate the entry in SWOFT					
+				[FILE_TABLE + [currentPCB + 15 + counter * 2] * 2] = -1;
+			endif;
+			// invalidate the PPOFT by setting fields to -1
+			[currentPCB + 15 + counter * 2] = -1;
+			[currentPCB + 15 + counter * 2 + 1] = -1;	
+		endif;
+		counter = counter + 1;
+	endwhile;
+		
+	// reset SP to 3 * 512
+	SP = 3 * 512;
+		
+	// store zero on top of the stack
+	physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+	[physicalSP] = 0;
+	ireturn;	// WHAT ABOUT THE RETURN VALUE?
+
+endif;
+
+
