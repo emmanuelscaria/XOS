@@ -21,7 +21,7 @@ ChangeLog
 	-- Fixed incorrect string comparision
 	-- Fixed incorrect format of 'store' compilation.
 
-Compiling
+Compilin
 =========
 * Use 'make' from the base directory to compile all components
 
