@@ -23,7 +23,7 @@ ChangeLog
 
 Compiling
 =========
-* Use 'make' from the base directory to compile all components
+* Use 'make' from the base directory to compile all compjjjk
 
 * To compile each component separately, cd into the corresponding directory
 and use 'make' command.
