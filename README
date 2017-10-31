@@ -22,7 +22,7 @@ ChangeLog
 	-- Fixed incorrect format of 'store' compilation.
 
 Compiling
-=========
+==========
 * Use 'make' from the base directory to compile all components
 
 * To compile each component separately, cd into the corresponding directory
